@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f6f5c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>metaboliq v1</title>
+<style>
+  :root {
+    --bg: #f4f6f5; --card: #fff; --text: #1d2422; --muted: #6b7672;
+    --accent: #1f6f5c; --accent2: #c2632b; --border: #dde3e0; --danger: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#121615; --card:#1c2220; --text:#e8eeeb; --muted:#97a39e; --border:#2e3633; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         background:var(--bg); color:var(--text); font-size:16px;
+         padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  header { padding:16px 16px 4px; }
+  h1 { margin:0; font-size:1.35rem; }
+  header p { margin:2px 0 0; color:var(--muted); font-size:.9rem; }
+  main { padding:12px 16px 32px; max-width:560px; margin:0 auto; }
+  .tabs { display:flex; gap:8px; margin-bottom:12px; }
+  .tabs button { flex:1; padding:12px; border-radius:12px; border:1px solid var(--border);
+                 background:var(--card); color:var(--text); font-size:1rem; font-weight:600; }
+  .tabs button.active.meal { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .tabs button.active.act  { background:var(--accent2); border-color:var(--accent2); color:#fff; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:14px; margin-bottom:14px; }
+  label { display:block; font-size:.85rem; color:var(--muted); margin:10px 0 4px; }
+  input, select { width:100%; padding:11px 12px; font-size:1rem; border-radius:10px;
+                  border:1px solid var(--border); background:var(--bg); color:var(--text); }
+  .row { display:flex; gap:10px; }
+  .row > div { flex:1; min-width:0; }
+  .btn { width:100%; padding:13px; font-size:1rem; font-weight:600; border:none; border-radius:12px;
+         margin-top:14px; color:#fff; background:var(--accent); }
+  .btn.act { background:var(--accent2); }
+  .btn.secondary { background:transparent; color:var(--text); border:1px solid var(--border); }
+  .btn.danger { background:transparent; color:var(--danger); border:1px solid var(--danger); }
+  .hidden { display:none; }
+  h2 { font-size:1.05rem; margin:0 0 8px; display:flex; justify-content:space-between; align-items:center; }
+  h2 small { color:var(--muted); font-weight:400; font-size:.85rem; }
+  ul { list-style:none; margin:0; padding:0; }
+  li { padding:10px 0; border-top:1px solid var(--border); display:flex; gap:10px; align-items:flex-start; }
+  li:first-child { border-top:none; }
+  .dot { width:10px; height:10px; border-radius:50%; margin-top:6px; flex:none; }
+  .dot.meal { background:var(--accent); } .dot.act { background:var(--accent2); }
+  .entry { flex:1; min-width:0; }
+  .entry b { display:block; overflow-wrap:anywhere; }
+  .entry span { color:var(--muted); font-size:.85rem; }
+  .actions button { background:none; border:none; color:var(--muted); font-size:1.1rem; padding:4px 6px; }
+  .empty { color:var(--muted); text-align:center; padding:12px 0; }
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#222; color:#fff;
+           padding:10px 16px; border-radius:10px; font-size:.9rem; opacity:0; transition:opacity .2s; pointer-events:none; }
+  .toast.show { opacity:.95; }
+  .quick { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .quick button { padding:6px 10px; border-radius:999px; border:1px solid var(--border);
+                  background:var(--bg); color:var(--text); font-size:.85rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>metaboliq v1</h1>
+  <p>Mahlzeiten &amp; Aktivität erfassen – CSV-Export für den Abgleich mit der Pumpe</p>
+</header>
+
+<main>
+  <div class="tabs">
+    <button id="tabMeal" class="meal active" type="button">🍽 Mahlzeit</button>
+    <button id="tabAct" class="act" type="button">🏃 Aktivität</button>
+  </div>
+
+  <!-- Mahlzeit -->
+  <form id="mealForm" class="card" autocomplete="off">
+    <label for="mealTime">Zeitpunkt</label>
+    <input id="mealTime" type="datetime-local" required>
+    <label for="mealName">Mahlzeit</label>
+    <input id="mealName" type="text" placeholder="z. B. Müsli mit Joghurt" required>
+    <div class="row">
+      <div><label for="carbs">Kohlenhydrate (g)</label><input id="carbs" type="number" inputmode="decimal" min="0" step="0.1"></div>
+      <div><label for="fat">Fett (g)</label><input id="fat" type="number" inputmode="decimal" min="0" step="0.1"></div>
+      <div><label for="sugar">Zucker (g)</label><input id="sugar" type="number" inputmode="decimal" min="0" step="0.1"></div>
+    </div>
+    <button class="btn" type="submit" id="mealSubmit">Mahlzeit speichern</button>
+    <button class="btn secondary hidden" type="button" id="mealCancel">Bearbeiten abbrechen</button>
+  </form>
+
+  <!-- Aktivität -->
+  <form id="actForm" class="card hidden" autocomplete="off">
+    <label for="actType">Art der Aktivität</label>
+    <input id="actType" type="text" list="actTypes" placeholder="z. B. Laufen" required>
+    <datalist id="actTypes"></datalist>
+    <div class="quick" id="actQuick"></div>
+    <div class="row">
+      <div><label for="actStart">Start</label><input id="actStart" type="datetime-local" required></div>
+      <div><label for="actEnd">Ende</label><input id="actEnd" type="datetime-local" required></div>
+    </div>
+    <button class="btn act" type="submit" id="actSubmit">Aktivität speichern</button>
+    <button class="btn secondary hidden" type="button" id="actCancel">Bearbeiten abbrechen</button>
+  </form>
+
+  <!-- Liste -->
+  <section class="card">
+    <h2>Einträge <small id="count"></small></h2>
+    <ul id="list"></ul>
+  </section>
+
+  <section class="card">
+    <button class="btn" type="button" id="exportBtn">⬇ CSV exportieren</button>
+    <button class="btn danger" type="button" id="clearBtn">Alle Einträge löschen</button>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  const KEY = "metaboliq_entries_v1";
+  const $ = id => document.getElementById(id);
+  let entries = load();
+  let editId = null;
+
+  // ---------- Speicher ----------
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; }
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(entries)); }
+    catch { toast("Speichern fehlgeschlagen – Browser-Speicher nicht verfügbar"); }
+  }
+
+  // ---------- Zeit-Helfer ----------
+  const pad = n => String(n).padStart(2, "0");
+  // Wert für <input type="datetime-local"> (lokale Zeit, ohne Sekunden)
+  function nowLocal() {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  // "YYYY-MM-DDTHH:MM" -> "%Y-%m-%d %H:%M:00"
+  function toStamp(v) {
+    if (!v) return "";
+    const [date, time] = v.split("T");
+    const parts = time.split(":");
+    return `${date} ${pad(parts[0])}:${pad(parts[1])}:00`;
+  }
+  function fromStamp(s) { return s ? s.replace(" ", "T").slice(0, 16) : ""; }
+  function pretty(s) {
+    const [d, t] = s.split(" ");
+    const [y, m, day] = d.split("-");
+    return `${day}.${m}.${y} ${t.slice(0,5)}`;
+  }
+  function duration(a, b) {
+    const ms = new Date(fromStamp(b)) - new Date(fromStamp(a));
+    const min = Math.round(ms / 60000);
+    return min >= 60 ? `${Math.floor(min/60)} h ${min%60} min` : `${min} min`;
+  }
+  const num = v => v === "" || v == null ? "" : String(Number(v));
+
+  // ---------- Tabs ----------
+  function showTab(which) {
+    $("tabMeal").classList.toggle("active", which === "meal");
+    $("tabAct").classList.toggle("active", which === "act");
+    $("mealForm").classList.toggle("hidden", which !== "meal");
+    $("actForm").classList.toggle("hidden", which !== "act");
+  }
+  $("tabMeal").onclick = () => { cancelEdit(); showTab("meal"); };
+  $("tabAct").onclick  = () => { cancelEdit(); showTab("act"); };
+
+  function resetMeal() {
+    $("mealForm").reset();
+    $("mealTime").value = nowLocal();
+  }
+  function resetAct() {
+    $("actForm").reset();
+    const n = nowLocal();
+    $("actStart").value = n; $("actEnd").value = n;
+  }
+
+  // ---------- Speichern ----------
+  $("mealForm").onsubmit = e => {
+    e.preventDefault();
+    const item = {
+      id: editId || crypto.randomUUID?.() || String(Date.now() + Math.random()),
+      type: "meal",
+      timestamp: toStamp($("mealTime").value),
+      meal: $("mealName").value.trim(),
+      carbs: num($("carbs").value), fat: num($("fat").value), sugar: num($("sugar").value),
+    };
+    upsert(item);
+    toast(editId ? "Mahlzeit aktualisiert" : "Mahlzeit gespeichert");
+    cancelEdit();
+  };
+
+  $("actForm").onsubmit = e => {
+    e.preventDefault();
+    const start = toStamp($("actStart").value), end = toStamp($("actEnd").value);
+    if (end < start) { toast("Ende liegt vor dem Start"); return; }
+    const item = {
+      id: editId || crypto.randomUUID?.() || String(Date.now() + Math.random()),
+      type: "act",
+      timestamp: start,
+      actStart: start, actEnd: end,
+      actType: $("actType").value.trim(),
+    };
+    upsert(item);
+    toast(editId ? "Aktivität aktualisiert" : "Aktivität gespeichert");
+    cancelEdit();
+  };
+
+  function upsert(item) {
+    const i = entries.findIndex(x => x.id === item.id);
+    if (i >= 0) entries[i] = item; else entries.push(item);
+    entries.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    save(); render();
+  }
+
+  // ---------- Bearbeiten / Löschen ----------
+  function startEdit(id) {
+    const x = entries.find(e => e.id === id);
+    if (!x) return;
+    editId = id;
+    if (x.type === "meal") {
+      showTab("meal");
+      $("mealTime").value = fromStamp(x.timestamp);
+      $("mealName").value = x.meal;
+      $("carbs").value = x.carbs; $("fat").value = x.fat; $("sugar").value = x.sugar;
+      $("mealSubmit").textContent = "Änderung speichern";
+      $("mealCancel").classList.remove("hidden");
+    } else {
+      showTab("act");
+      $("actType").value = x.actType;
+      $("actStart").value = fromStamp(x.actStart);
+      $("actEnd").value = fromStamp(x.actEnd);
+      $("actSubmit").textContent = "Änderung speichern";
+      $("actCancel").classList.remove("hidden");
+    }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+  function cancelEdit() {
+    editId = null;
+    $("mealSubmit").textContent = "Mahlzeit speichern";
+    $("actSubmit").textContent = "Aktivität speichern";
+    $("mealCancel").classList.add("hidden");
+    $("actCancel").classList.add("hidden");
+    resetMeal(); resetAct();
+  }
+  $("mealCancel").onclick = cancelEdit;
+  $("actCancel").onclick = cancelEdit;
+
+  function remove(id) {
+    if (!confirm("Eintrag löschen?")) return;
+    entries = entries.filter(e => e.id !== id);
+    save(); render();
+  }
+
+  $("clearBtn").onclick = () => {
+    if (!entries.length) return;
+    if (!confirm(`Wirklich alle ${entries.length} Einträge löschen? Vorher am besten exportieren.`)) return;
+    entries = []; save(); render();
+  };
+
+  // ---------- Liste ----------
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+  function render() {
+    const list = $("list");
+    $("count").textContent = entries.length ? `${entries.length}` : "";
+    if (!entries.length) { list.innerHTML = '<li class="empty">Noch keine Einträge</li>'; renderActTypes(); return; }
+    list.innerHTML = [...entries].reverse().map(x => {
+      if (x.type === "meal") {
+        const n = [x.carbs !== "" && `KH ${x.carbs} g`, x.fat !== "" && `Fett ${x.fat} g`, x.sugar !== "" && `Zucker ${x.sugar} g`]
+          .filter(Boolean).join(" · ");
+        return `<li><div class="dot meal"></div><div class="entry"><b>${esc(x.meal)}</b>
+          <span>${pretty(x.timestamp)}${n ? " · " + n : ""}</span></div>
+          <div class="actions"><button data-edit="${x.id}" aria-label="Bearbeiten">✎</button><button data-del="${x.id}" aria-label="Löschen">🗑</button></div></li>`;
+      }
+      return `<li><div class="dot act"></div><div class="entry"><b>${esc(x.actType)}</b>
+        <span>${pretty(x.actStart)} – ${x.actEnd.slice(11,16)} · ${duration(x.actStart, x.actEnd)}</span></div>
+        <div class="actions"><button data-edit="${x.id}" aria-label="Bearbeiten">✎</button><button data-del="${x.id}" aria-label="Löschen">🗑</button></div></li>`;
+    }).join("");
+    renderActTypes();
+  }
+  $("list").onclick = e => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.edit) startEdit(b.dataset.edit);
+    if (b.dataset.del) remove(b.dataset.del);
+  };
+
+  // zuletzt genutzte Aktivitätsarten als Schnellauswahl
+  function renderActTypes() {
+    const defaults = ["Gehen", "Laufen", "Radfahren", "Krafttraining", "Schwimmen"];
+    const used = [...new Set(entries.filter(e => e.type === "act").map(e => e.actType).reverse())];
+    const all = [...new Set([...used, ...defaults])].slice(0, 8);
+    $("actTypes").innerHTML = all.map(t => `<option value="${esc(t)}">`).join("");
+    $("actQuick").innerHTML = all.map(t => `<button type="button">${esc(t)}</button>`).join("");
+  }
+  $("actQuick").onclick = e => {
+    const b = e.target.closest("button"); if (b) $("actType").value = b.textContent;
+  };
+
+  // ---------- CSV-Export ----------
+  const HEADER = ["timestamp", "mahlzeit", "kohlenhydrate_g", "fett_g", "zucker_g",
+                  "aktivitaet_start", "aktivitaet_ende", "aktivitaet_art"];
+  function csvCell(v) {
+    const s = v == null ? "" : String(v);
+    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+  function buildCsv() {
+    const rows = entries.map(x => x.type === "meal"
+      ? [x.timestamp, x.meal, x.carbs, x.fat, x.sugar, "", "", ""]
+      : [x.timestamp, "", "", "", "", x.actStart, x.actEnd, x.actType]);
+    return [HEADER, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  }
+
+  $("exportBtn").onclick = async () => {
+    if (!entries.length) { toast("Keine Einträge zum Exportieren"); return; }
+    const d = new Date();
+    const name = `metaboliq_${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.csv`;
+    const blob = new Blob([buildCsv()], { type: "text/csv;charset=utf-8" });
+
+    // Auf dem Handy: Teilen-Menü (Mail, Drive, Dateien …), falls verfügbar
+    try {
+      const file = new File([blob], name, { type: "text/csv" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: name });
+        return;
+      }
+    } catch (err) { if (err && err.name === "AbortError") return; }
+
+    // Sonst: normaler Download
+    const url = URL.createObjectURL(blob);
+    const a = Object.assign(document.createElement("a"), { href: url, download: name });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast("CSV heruntergeladen");
+  };
+
+  // ---------- Toast ----------
+  let tt;
+  function toast(msg) {
+    const t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(tt); tt = setTimeout(() => t.classList.remove("show"), 2000);
+  }
+
+  // ---------- Start ----------
+  resetMeal(); resetAct(); render();
+})();
+</script>
+</body>
+</html>
